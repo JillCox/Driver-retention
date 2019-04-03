@@ -12,3 +12,6 @@ Each of the included files were areas that were looked into to try to determine 
 
 "Retention Query"- Looks at difference in pay, pay codes used, time on the job, etc. between those who stayed and those who left. 
 
+"Demographics" - is a look at how personal characteristics affect the likelihood of someone staying or leaving. These results can be found in the "Demographics Results" Excel sheet if you are interested; however, due to concerns from HR the demographics are not included in the recommendations to the company.
+
+Now take a look at the Driver Retention Powerpoint to see what the business take aways were. 
