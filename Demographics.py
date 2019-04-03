@@ -11,19 +11,23 @@ retention= "RetentionAccident.csv"
 df= pd.read_csv(retention)
 h = df.head(5)
 print(h)
+
 #drop unneeded columns
 df= df.drop(columns=['phone', 'groupavgpay', 'CSA_month', 'Vio_month',
                      'sumlayover', 'avglayover', 'student_to_team_driver_days'])
 
-#import GP data
-GP1 = "cven_Upr00100.csv"
+#import HR data
+GP1 = "Upr00100.csv"
 GP100 = pd.read_csv(GP1, low_memory=False)
+
 #keep only the columns we want
 GP100= GP100[['EMPLOYID', 'GENDER', 'ETHNORGN', 'MARITALSTATUS']]
 GP100.head(5)
 
-GP2 = "cven_Upr00111.csv"
+#insurance information and number of dependants
+GP2 = "Upr00111.csv"
 GP111 = pd.read_csv(GP2)
+
 #keep only the columns we want
 GP111= GP111[['EMPLOYID', 'DEPENDENTSSN']]
 GP111.head(5)
@@ -38,6 +42,7 @@ GP111.head(30)
 
 # merge the two GP tables
 GPtotal= pd.merge(GP100, GP111, how= 'left', on= 'EMPLOYID')
+
 #rename column EMPLOYID to match retention sample
 #df.rename(columns= {'old_columnname':'new_columnname'}, inplace=True)
 GPtotal.rename(columns= {'EMPLOYID': 'mpp_id'}, inplace= True)
@@ -48,7 +53,7 @@ GPtotal['mpp_id']= GPtotal['mpp_id'].astype(str)
 df['mpp_id']= df['mpp_id'].astype(str)
 Retention= pd.merge(df, GPtotal, how= 'left', on= 'mpp_id')
 
-####################exploratory analyzis##########################
+####################exploratory analysis##########################
 #deal with NAs
 #replace missing values with 0 so they can be easily un/included
 Retention['GENDER']= Retention['GENDER'].fillna(value=0)
@@ -109,16 +114,16 @@ Retention['DEPENDENTSSN']= Retention['DEPENDENTSSN'].replace(6, '2+')
 Retention['DEPENDENTSSN']= Retention['DEPENDENTSSN'].replace(7, '2+')
 Retention['DEPENDENTSSN']= Retention['DEPENDENTSSN'].replace(8, '2+')
 Retention['DEPENDENTSSN']= Retention['DEPENDENTSSN'].replace(10, '2+')
-#replace values with class labels
-#iris.species= np.where(iris.species == 0.0, 'setosa', 
-#                       np.where(iris.species==1.0, 'versicolor', 'virginica'))
 
 # find if anything was missed
 Retention['DEPENDENTSSN'].unique()
+
 #higher dimensional tables
 mar_deps= pd.crosstab(index= Retention['stayed'], columns=[Retention['MARITALSTATUS'], 
                       Retention['DEPENDENTSSN']],
                       margins= True)
+
+#show proportions
 prop_mar_deps= mar_deps/mar_deps.loc["All"]
 
 #more details
@@ -133,6 +138,7 @@ Active_days = pd.pivot_table(Retention, values= ['active_driving_day_count'],
                                     index= ['stayed', 'DEPENDENTSSN'],
                                     columns= ['MARITALSTATUS'])
 Retention.describe()
+
 #compare standard metrics between stayed and left
 Stayed=Retention[Retention['stayed'] == 'Stayed']
 Left= Retention[Retention['stayed'] == 'Left']
@@ -151,9 +157,3 @@ Retention.groupby(by= "stayed").mean().plot(kind= "bar")
 #look at correlation
 corr= Retention.corr()
 print(corr)
-
-################################## modeling############################
-
-
-
-
