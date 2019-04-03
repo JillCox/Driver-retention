@@ -1,9 +1,8 @@
 -- termed employees--
+-- calculated for drivers who have already left
 ---------------------
-
-
 DROP TABLE #Drivers, #paydetail, #segregate, #step1, #step2, #week
--- pull in pro drivers 6 months prior to termination date
+-- pull in professional drivers 6 months prior to termination date
 SELECT    
    mpp_id
   ,DATEADD(MONTH, -6, mpp_terminationdt) 'StartDate'
@@ -13,22 +12,23 @@ SELECT
   ,mpp_type1
 INTO 
    #Drivers
-FROM  tmw_live.dbo.manpowerprofile
+FROM  live.dbo.manpowerprofile
 WHERE mpp_status = 'OUT'
       AND mpp_terminationdt >= '2018-01-01';
+      
 -- pay details for the last 6 months one week at a time
 SELECT   
-   mpp_id, StartDate, mpp_terminationdt, mpp_state, mpp_type2, mpp_type1, lgh_number, mov_number, pyt_itemcode, pyd_description, pyd_rate, pyd_amount, pyh_payperiod, pyd_sequence, pyd_branch
+   mpp_id, StartDate, mpp_terminationdt, mpp_state, mpp_type2, mpp_type1, lgh_number, mov_number, pyt_itemcode, pyd_description, 
+   pyd_rate, pyd_amount, pyh_payperiod, pyd_sequence, pyd_branch
 INTO #paydetail
-FROM TMW_LIVE.dbo.paydetail
+FROM LIVE.dbo.paydetail
 JOIN #Drivers ON asgn_type = 'DRV'
                  AND asgn_id = mpp_id
                  AND pyh_payperiod >= StartDate
                  AND pyh_payperiod < mpp_terminationdt
 ORDER BY mpp_id
 
---minimize and divide into groups
-
+--group by person and divide into groups
 SELECT DISTINCT mpp_id, pyh_payperiod, mpp_terminationdt, StartDate, mpp_state, mpp_type1,
 	CASE WHEN mpp_type2 in ('DRV180', 'DRV90', 'TD1', 'TD2', 'VET22', 'FPST', 'ST1', 'VET11', 'STUD', 'ST2-3', 'FPEX')
 		THEN 'Team Driver_Student'
@@ -70,7 +70,8 @@ SELECT DISTINCT mpp_id, pyh_payperiod, mpp_terminationdt, StartDate, mpp_state, 
 			THEN SUM(pyd_amount) 
 			ELSE 0
 			END 'ENDSE',
-		CASE WHEN pyt_itemcode in ('TRAVEL', 'HOTEL', 'CHAIN', 'SCALE', 'OIL', 'FAX', 'PALLET', 'PARKING', 'REPAIR', 'ADV.MO', 'ADV.LU', 'ADV.HZ', 'ORTRAV', 'HOLDAY') 
+		CASE WHEN pyt_itemcode in ('TRAVEL', 'HOTEL', 'CHAIN', 'SCALE', 'OIL', 'FAX', 'PALLET', 'PARKING', 'REPAIR',
+					   'ADV.MO', 'ADV.LU', 'ADV.HZ', 'ORTRAV', 'HOLDAY') 
 			THEN SUM(pyd_amount) 
 			ELSE 0
 			END 'chargeback',
@@ -86,8 +87,10 @@ SELECT DISTINCT mpp_id, pyh_payperiod, mpp_terminationdt, StartDate, mpp_state, 
 			THEN SUM(pyd_amount) 
 			ELSE 0
 			END 'correction',
-		CASE WHEN pyt_itemcode not in ('GRNT', 'HAZRET', 'HAZMTM', 'LOCAL', 'BNSSAF', 'TRAVEL', 'HOTEL', 'CHAIN', 'SCALE', 'OIL', 'FAX', 'PALLET', 'PARKING', 'REPAIR', 'ADV.MO', 'ADV.LU', 'ADV.HZ', 'ORTRAV', 'HOLDAY', 'ENDRSE', 'ENDRS-', 'DRVSLY', 
-										'DETPAY', 'STOPS', 'LDMNY', 'ADV.PA', 'PDIEM', 'MILES', 'FINES') 
+		CASE WHEN pyt_itemcode not in ('GRNT', 'HAZRET', 'HAZMTM', 'LOCAL', 'BNSSAF', 'TRAVEL', 'HOTEL', 'CHAIN', 'SCALE', 'OIL',
+					       'FAX', 'PALLET', 'PARKING', 'REPAIR', 'ADV.MO', 'ADV.LU', 'ADV.HZ', 'ORTRAV', 'HOLDAY',
+					       'ENDRSE', 'ENDRS-', 'DRVSLY', 'DETPAY', 'STOPS', 'LDMNY', 'ADV.PA', 'PDIEM', 'MILES',
+					       'FINES') 
 			THEN SUM(pyd_amount) 
 			ELSE 0
 			END 'other',
@@ -108,7 +111,8 @@ SELECT DISTINCT mpp_id, pyh_payperiod, mpp_terminationdt, StartDate, mpp_state, 
  GROUP BY mpp_id, pyh_payperiod, mpp_terminationdt, StartDate, pyt_itemcode, mpp_state, mpp_type1, mpp_type2
 
  SELECT DISTINCT mpp_id, Drivertype, mpp_type1,
-	(SUM(FINES)+ SUM(MILES)+ SUM(PDIEM) + SUM(personaladv) + SUM(Detention) + SUM(DRVSLY) + SUM(ENDSE) + SUM(chargeback) + SUM(safetybonus) + SUM(calcrev) + SUM(correction) + SUM(other)) 'weekpay',
+	(SUM(FINES)+ SUM(MILES)+ SUM(PDIEM) + SUM(personaladv) + SUM(Detention) + SUM(DRVSLY) + SUM(ENDSE) + SUM(chargeback) + 
+	 SUM(safetybonus) + SUM(calcrev) + SUM(correction) + SUM(other)) 'weekpay',
 	CASE WHEN SUM(FINES) < 0 THEN 1
 		ELSE 0
 		END 'finesbinary',
@@ -130,7 +134,8 @@ SELECT DISTINCT mpp_id, pyh_payperiod, mpp_terminationdt, StartDate, mpp_state, 
 	CASE WHEN SUM(correction) >0 THEN 1
 		ELSE 0
 		END 'correctionbinary',
-	CASE WHEN (SUM(FINES)+ SUM(MILES)+ SUM(PDIEM) + SUM(personaladv) + SUM(Detention) + SUM(DRVSLY) + SUM(ENDSE) + SUM(chargeback) + SUM(safetybonus) + SUM(calcrev) + SUM(correction) + SUM(other)) != 0
+	CASE WHEN (SUM(FINES)+ SUM(MILES)+ SUM(PDIEM) + SUM(personaladv) + SUM(Detention) + SUM(DRVSLY) + SUM(ENDSE) + 
+		   SUM(chargeback) + SUM(safetybonus) + SUM(calcrev) + SUM(correction) + SUM(other)) != 0
 		THEN 1
 		ELSE 1
 		END 'termedbinary',
@@ -142,7 +147,6 @@ SELECT DISTINCT mpp_id, pyh_payperiod, mpp_terminationdt, StartDate, mpp_state, 
 		ELSE 0
 		END 'layoverbinary',
 	DENSE_RANK() OVER (PARTITION BY mpp_id ORDER BY pyh_payperiod DESC) AS ranking
-
 INTO #week
 FROM #segregate
 GROUP BY mpp_id, Drivertype, pyh_payperiod, mpp_type1
@@ -156,10 +160,12 @@ SELECT
 INTO #step1
 FROM #week
 WHERE weekpay >200.00 
---and mpp_id = 'CVEN'
-GROUP BY mpp_id, Drivertype, mpp_type1, weekpay, finesbinary, detentionbinary, DRVSLYbinary, ENDSEbinary, chargebackbinary, safetybinary, correctionbinary, termedbinary, [count],latehomebinary, layoverbinary
+and mpp_id = 'company'
+GROUP BY mpp_id, Drivertype, mpp_type1, weekpay, finesbinary, detentionbinary, DRVSLYbinary, ENDSEbinary, chargebackbinary, 
+	safetybinary, correctionbinary, termedbinary, [count],latehomebinary, layoverbinary
 
-SELECT mpp_id, Drivertype, mpp_type1, weekpay, finesbinary, detentionbinary, DRVSLYbinary, ENDSEbinary, chargebackbinary, safetybinary, correctionbinary, termedbinary, [count], latehomebinary, layoverbinary,
+SELECT mpp_id, Drivertype, mpp_type1, weekpay, finesbinary, detentionbinary, DRVSLYbinary, ENDSEbinary, chargebackbinary, safetybinary,
+	correctionbinary, termedbinary, [count], latehomebinary, layoverbinary,
 	(avgdriverpay - weekpay)  AS driverdiff,
 	avgdriverpay, groupavgpay
 INTO #step2
@@ -184,15 +190,8 @@ SELECT DISTINCT mpp_id, Drivertype, mpp_type1,
 	0 'stayed'
 INTO #step3
 FROM #step2
-GROUP BY mpp_id, Drivertype, mpp_type1, avgdriverpay, groupavgpay, finesbinary, detentionbinary, DRVSLYbinary, ENDSEbinary, chargebackbinary, safetybinary, correctionbinary, termedbinary, [count], latehomebinary, layoverbinary, driverdiff
--- DROP TABLE #step3
-/*	SELECT DISTINCT DriverType, mpp_type1,  avg(finescount) 'FINESavg',  avg(detentioncount) 'DETavg',  avg(DRVSLYcount) 'DRVSLYavg', 
-	 avg(endorsecount) 'endorseavg',  avg(chargebackcount) 'chargebackavg',  avg(safetycount) 'safetyavg', 
-	 avg(correctioncount) 'correctionavg', avg(paydetails) 'payavg', avg(mindridiff) 'mindriavg',
-	avg(maxdridiff) 'maxdiravg',  avg(avgdriverpay) 'avgdripayavg',  avg(groupavgpay) 'groupavgpayavg'
-	FROM #step3
-	GROUP BY Drivertype, mpp_type1 */
-
+GROUP BY mpp_id, Drivertype, mpp_type1, avgdriverpay, groupavgpay, finesbinary, detentionbinary, DRVSLYbinary, ENDSEbinary, 
+	chargebackbinary, safetybinary, correctionbinary, termedbinary, [count], latehomebinary, layoverbinary, driverdiff
 
 DROP TABLE #Drivers2, #paydetail2, #segregate2, #step12, #step22, #step32 ,#week2
 
@@ -208,13 +207,14 @@ SELECT
   ,mpp_type1
 INTO 
    #Drivers2
-FROM  tmw_live.dbo.manpowerprofile
+FROM  live.dbo.manpowerprofile
 WHERE  mpp_terminationdt = '2049-12-31 23:59:00.000';
 
 SELECT   
-   mpp_id, StartDate, mpp_terminationdt, mpp_state, mpp_type2, mpp_type1, lgh_number, mov_number, pyt_itemcode, pyd_description, pyd_rate, pyd_amount, pyh_payperiod, pyd_sequence, pyd_branch
+   mpp_id, StartDate, mpp_terminationdt, mpp_state, mpp_type2, mpp_type1, lgh_number, mov_number, pyt_itemcode, pyd_description, 
+   pyd_rate, pyd_amount, pyh_payperiod, pyd_sequence, pyd_branch
 INTO #paydetail2
-FROM TMW_LIVE.dbo.paydetail
+FROM LIVE.dbo.paydetail
 JOIN #Drivers2 ON asgn_type = 'DRV'
                  AND asgn_id = mpp_id
                  AND pyh_payperiod >= StartDate
@@ -302,7 +302,8 @@ SELECT DISTINCT mpp_id, pyh_payperiod, mpp_terminationdt, StartDate, mpp_state, 
  GROUP BY mpp_id, pyh_payperiod, mpp_terminationdt, StartDate, pyt_itemcode, mpp_state, mpp_type1, mpp_type2
 
  SELECT DISTINCT mpp_id, Drivertype, mpp_type1,
-	(SUM(FINES)+ SUM(MILES)+ SUM(PDIEM) + SUM(personaladv) + SUM(Detention) + SUM(DRVSLY) + SUM(ENDSE) + SUM(chargeback) + SUM(safetybonus) + SUM(calcrev) + SUM(correction) + SUM(other)) 'weekpay',
+	(SUM(FINES)+ SUM(MILES)+ SUM(PDIEM) + SUM(personaladv) + SUM(Detention) + SUM(DRVSLY) + SUM(ENDSE) + SUM(chargeback) + 
+	 SUM(safetybonus) + SUM(calcrev) + SUM(correction) + SUM(other)) 'weekpay',
 	CASE WHEN SUM(FINES) < 0 THEN 1
 		ELSE 0
 		END 'finesbinary',
@@ -324,7 +325,8 @@ SELECT DISTINCT mpp_id, pyh_payperiod, mpp_terminationdt, StartDate, mpp_state, 
 	CASE WHEN SUM(correction) >0 THEN 1
 		ELSE 0
 		END 'correctionbinary',
-	CASE WHEN (SUM(FINES)+ SUM(MILES)+ SUM(PDIEM) + SUM(personaladv) + SUM(Detention) + SUM(DRVSLY) + SUM(ENDSE) + SUM(chargeback) + SUM(safetybonus) + SUM(calcrev) + SUM(correction) + SUM(other)) != 0
+	CASE WHEN (SUM(FINES)+ SUM(MILES)+ SUM(PDIEM) + SUM(personaladv) + SUM(Detention) + SUM(DRVSLY) + SUM(ENDSE) + 
+		   SUM(chargeback) + SUM(safetybonus) + SUM(calcrev) + SUM(correction) + SUM(other)) != 0
 		THEN 1
 		ELSE 1
 		END 'termedbinary',
@@ -396,12 +398,13 @@ UNION ALL
 SELECT * FROM #step32) a
 --SELECT * FROM #all
 -- DROP TABLE #model
-SELECT a.mpp_id, Drivertype, a.mpp_type1, finescount, detentioncount, DRVSLYcount, endorsecount, chargebackcount, safetycount, correctioncount, latehomecount, layoverbinary,
- ISNULL(p.mpp_firstname + ' ' + p.mpp_lastname, 'UNKNOWN') 'DriverName',paydetails, avgdriverpay, AVG(avgdriverpay) OVER(PARTITION BY Drivertype, a.mpp_type1) AS groupavgpay, stayed
+SELECT a.mpp_id, Drivertype, a.mpp_type1, finescount, detentioncount, DRVSLYcount, endorsecount, chargebackcount, safetycount, 
+	correctioncount, latehomecount, layoverbinary, ISNULL(p.mpp_firstname + ' ' + p.mpp_lastname, 'UNKNOWN') 'DriverName',
+	paydetails, avgdriverpay, AVG(avgdriverpay) OVER(PARTITION BY Drivertype, a.mpp_type1) AS groupavgpay, stayed
 INTO #model
 FROM #all a
 LEFT JOIN tmw_live.dbo.manpowerprofile  p (NOLOCK) on a.mpp_id = p.mpp_id
-WHERE a.mpp_type1 = 'CVEN'
+WHERE a.mpp_type1 = 'company'
 --SELECT * FROM #model
 -------------------------------------------------------------------------------------------------------------------
 --add safety measures, seniority, days to accident, phone number, and name
@@ -421,7 +424,8 @@ LEFT JOIN Omnitracs.dbo.MECEREvents m (NOLOCK) on a.mpp_id = m.DriverID and Even
 LEFT JOIN tmw_live.dbo.manpowerprofile  p (NOLOCK) on a.mpp_id = p.mpp_id
 LEFT JOIN STRACS.dbo.CT_Occur_Extract e (NOLOCK) on a.mpp_id = e.MISC2_NM and  SPECIAL23= 'Chargeable'
 LEFT JOIN ITQ.dbo.DriverVioHistory vio (NOLOCK) on a.DriverName = vio.DriverName
-GROUP BY a.mpp_id, a.Drivertype, a.finescount, a.detentioncount, a.DRVSLYcount, a.endorsecount, a.chargebackcount, a.safetycount, a.correctioncount, a.paydetails, 
+GROUP BY a.mpp_id, a.Drivertype, a.finescount, a.detentioncount, a.DRVSLYcount, a.endorsecount, a.chargebackcount, a.safetycount,
+	     a.correctioncount, a.paydetails, 
 a.avgdriverpay, a.groupavgpay, a.stayed, p.mpp_hiredate, e.REPORT_DT, 
 p.mpp_firstname, p.mpp_lastname, p.mpp_currentphone, a.DriverName, a.latehomecount, a.layoverbinary
 ORDER BY seniority desc
